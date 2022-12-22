@@ -7,6 +7,9 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/SpringArmComponent.h"
+#include <Interfaces/OnlineSessionInterface.h>
+#include <OnlineSessionSettings.h>
+#include <OnlineSubsystem.h>
 
 //////////////////////////////////////////////////////////////////////////
 // AMenuSystemCharacter
@@ -51,6 +54,40 @@ AMenuSystemCharacter::AMenuSystemCharacter()
 	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
 }
 
+void AMenuSystemCharacter::BeginPlay()
+{
+	Super::BeginPlay();
+	
+	// Online subsystem addition
+	const IOnlineSubsystem* OnlineSubsystem = IOnlineSubsystem::Get();
+	if (OnlineSubsystem)
+	{
+		OnlineSession = OnlineSubsystem->GetSessionInterface();
+		if (!OnlineSession.IsValid())
+		{
+			return;
+		}
+
+		if (!CreateSessionCompleteDelegate.IsBoundToObject(this))
+		{
+			CreateSessionCompleteDelegate.BindUObject(this, &ThisClass::OnCreateSessionComplete);
+			OnlineSession->OnCreateSessionCompleteDelegates.Add(CreateSessionCompleteDelegate);
+		}
+
+		if (!FindSessionsCompleteDelegate.IsBoundToObject(this))
+		{
+			FindSessionsCompleteDelegate.BindUObject(this, &AMenuSystemCharacter::OnFindSessionsComplete);
+			OnlineSession->OnFindSessionsCompleteDelegates.Add(FindSessionsCompleteDelegate);
+		}
+
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Cyan, 
+				FString::Printf(TEXT("Found subsystem: %s"), *OnlineSubsystem->GetSubsystemName().ToString()));
+		}
+	}
+}
+
 //////////////////////////////////////////////////////////////////////////
 // Input
 
@@ -75,6 +112,128 @@ void AMenuSystemCharacter::SetupPlayerInputComponent(class UInputComponent* Play
 	// handle touch devices
 	PlayerInputComponent->BindTouch(IE_Pressed, this, &AMenuSystemCharacter::TouchStarted);
 	PlayerInputComponent->BindTouch(IE_Released, this, &AMenuSystemCharacter::TouchStopped);
+}
+
+void AMenuSystemCharacter::CreateGameSession()
+{
+	if (!OnlineSession.IsValid())
+	{
+		UE_LOG(LogOnlineSession, Error, TEXT("Can't create a session without a valid OSS"));
+		return;
+	}
+
+	const UWorld* World = GetWorld();
+	if (!IsValid(World))
+	{
+		return;
+	}
+
+	const ULocalPlayer* LocalPlayer = World->GetFirstLocalPlayerFromController();
+	if (!IsValid(LocalPlayer))
+	{
+		return;
+	}
+
+	if (OnlineSession->GetNamedSession(NAME_GameSession))
+	{
+		OnlineSession->DestroySession(NAME_GameSession);
+	}
+
+	TSharedRef<FOnlineSessionSettings> NewSessionSettings = MakeShared<FOnlineSessionSettings>();
+	NewSessionSettings->bIsLANMatch = false;
+	NewSessionSettings->NumPublicConnections = 4;
+	NewSessionSettings->bAllowJoinInProgress = true;
+	NewSessionSettings->bShouldAdvertise = true;
+	NewSessionSettings->bUseLobbiesIfAvailable = true;
+	NewSessionSettings->Set(FName("MatchType"), FString("FreeForAll"), EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
+	NewSessionSettings->bAllowJoinViaPresence = NewSessionSettings->bUsesPresence = true; // use world regions!
+	OnlineSession->CreateSession(*LocalPlayer->GetPreferredUniqueNetId(), NAME_GameSession, *NewSessionSettings);
+}
+
+void AMenuSystemCharacter::JoinGameSession()
+{
+	if (!OnlineSession.IsValid())
+	{
+		UE_LOG(LogOnlineSession, Error, TEXT("Can't create a session without a valid OSS"));
+		return;
+	}
+
+	const UWorld* World = GetWorld();
+	if (!IsValid(World))
+	{
+		return;
+	}
+
+	const ULocalPlayer* LocalPlayer = World->GetFirstLocalPlayerFromController();
+	if (!IsValid(LocalPlayer))
+	{
+		return;
+	}
+
+	SessionSearch = MakeShareable(new FOnlineSessionSearch());
+	SessionSearch->MaxSearchResults = 10000;
+	SessionSearch->bIsLanQuery = false;
+	SessionSearch->QuerySettings.Set(SEARCH_PRESENCE, true, EOnlineComparisonOp::Equals);
+	OnlineSession->FindSessions(*LocalPlayer->GetPreferredUniqueNetId(), SessionSearch.ToSharedRef());
+}
+
+void AMenuSystemCharacter::OnCreateSessionComplete(FName SessionName, bool bWasSuccessful)
+{
+	if (bWasSuccessful)
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Blue, FString::Printf(TEXT("Created session with name: %s"), *SessionName.ToString()));
+		}
+	}
+	else
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Red, FString(TEXT("Failed to create session")));
+		}
+	}
+}
+
+void AMenuSystemCharacter::OnFindSessionsComplete(bool bWasSuccessful)
+{
+	if (!SessionSearch.IsValid())
+	{
+		return;
+	}
+
+	if (!bWasSuccessful)
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Red,
+				FString("Error finding sessions"));
+		}
+
+		return;
+	}
+
+	if (SessionSearch->SearchResults.IsEmpty())
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Orange,
+				FString("No sessions found"));
+		}
+
+		return;
+	}
+
+	for (const FOnlineSessionSearchResult& Result : SessionSearch->SearchResults)
+	{
+		const FString IdStr = Result.GetSessionIdStr();
+		const FString& User = Result.Session.OwningUserName;
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Green,
+				FString::Printf(TEXT("Session Id: %s, owner: %s"), *IdStr, *User));
+		}
+	}
 }
 
 void AMenuSystemCharacter::TouchStarted(ETouchIndex::Type FingerIndex, FVector Location)

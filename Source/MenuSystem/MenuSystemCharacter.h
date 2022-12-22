@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "Interfaces/OnlineSessionDelegates.h"
 #include "MenuSystemCharacter.generated.h"
 
 UCLASS(config=Game)
@@ -20,6 +21,8 @@ class AMenuSystemCharacter : public ACharacter
 	class UCameraComponent* FollowCamera;
 public:
 	AMenuSystemCharacter();
+
+	void BeginPlay() override;
 
 	/** Base turn rate, in deg/sec. Other scaling may affect final turn rate. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category=Input)
@@ -61,5 +64,24 @@ public:
 	FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 	/** Returns FollowCamera subobject **/
 	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
-};
 
+
+protected:
+	UFUNCTION(BlueprintCallable, Category = "Custom Sessions|Session")
+	void CreateGameSession();
+
+	UFUNCTION(BlueprintCallable, Category = "Custom Sessions|Session")
+	void JoinGameSession();
+
+	void OnCreateSessionComplete(FName SessionName, bool bWasSuccessful);
+	void OnFindSessionsComplete(bool bWasSuccessful);
+
+	TSharedPtr<class FOnlineSessionSearch> SessionSearch;
+private:
+	FOnCreateSessionCompleteDelegate CreateSessionCompleteDelegate;
+	FOnFindSessionsCompleteDelegate FindSessionsCompleteDelegate;
+
+public:
+	TSharedPtr<class IOnlineSession, ESPMode::ThreadSafe>  OnlineSession = nullptr;
+
+};
