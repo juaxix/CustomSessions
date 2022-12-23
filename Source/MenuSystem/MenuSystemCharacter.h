@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
-#include "Interfaces/OnlineSessionDelegates.h"
+#include "Interfaces/OnlineSessionInterface.h"
 #include "MenuSystemCharacter.generated.h"
 
 UCLASS(config=Game)
@@ -75,13 +75,20 @@ protected:
 
 	void OnCreateSessionComplete(FName SessionName, bool bWasSuccessful);
 	void OnFindSessionsComplete(bool bWasSuccessful);
+	void OnJoinSessionComplete(FName SessionName, EOnJoinSessionCompleteResult::Type Result);
 
-	TSharedPtr<class FOnlineSessionSearch> SessionSearch;
+	TSharedPtr<FOnlineSessionSearch> SessionSearch;
+
 private:
 	FOnCreateSessionCompleteDelegate CreateSessionCompleteDelegate;
 	FOnFindSessionsCompleteDelegate FindSessionsCompleteDelegate;
+	FOnJoinSessionCompleteDelegate JoinSessionCompleteDelegate;
+
+	FDelegateHandle CreateSessionCompleteDelegate_Handle,
+					FindSessionsCompleteDelegate_Handle,
+					JoinSessionCompleteDelegate_Handle;
 
 public:
-	TSharedPtr<class IOnlineSession, ESPMode::ThreadSafe>  OnlineSession = nullptr;
+	IOnlineSessionPtr OnlineSession = nullptr;
 
 };
