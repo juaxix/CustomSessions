@@ -304,7 +304,7 @@ void AMenuSystemCharacter::OnFindSessionsComplete(bool bWasSuccessful)
 				*IdStr, *User, *MatchType));
 		}
 
-		if (!SessionToJoin && MatchType == MatchTypeFree4a)
+		if (!SessionToJoin && MatchType.Equals(MatchTypeFree4a))
 		{
 			SessionToJoin = &Result;
 		}
@@ -315,7 +315,7 @@ void AMenuSystemCharacter::OnFindSessionsComplete(bool bWasSuccessful)
 		const FString IdStr = SessionToJoin->GetSessionIdStr();
 		if (GEngine)
 		{
-			GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Green,
+			GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Emerald,
 				FString::Printf(TEXT("Joining Session Id: %s..."), 
 				*IdStr));
 		}
@@ -329,11 +329,16 @@ void AMenuSystemCharacter::OnJoinSessionComplete(FName SessionName, EOnJoinSessi
 {
 	if (!OnlineSession)
 	{
+		UE_LOG(LogOnlineSession, Error, TEXT("AMenuSystemCharacter::OnJoinSessionComplete : OnlineSession is not valid"));
 		return;
 	}
 	
-	OnlineSession->ClearOnJoinSessionCompleteDelegate_Handle(JoinSessionCompleteDelegate_Handle);
-	JoinSessionCompleteDelegate_Handle.Reset();
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Emerald,
+			FString::Printf(TEXT("Join Session [%s] completed with Result: %d"),
+			*SessionName.ToString(), static_cast<uint8>(Result)));
+	}
 	
 	switch (Result)
 	{
@@ -345,17 +350,30 @@ void AMenuSystemCharacter::OnJoinSessionComplete(FName SessionName, EOnJoinSessi
 					UE_LOG(LogOnlineSession, Error, TEXT("Could not get the address to travel to"));
 					return;
 				}
+				
 				APlayerController* PlayerController = GetGameInstance()->GetFirstLocalPlayerController();
-				if (IsValid(PlayerController))
+				if (!IsValid(PlayerController))
 				{
+					UE_LOG(LogOnlineSession, Error, TEXT("Could not find a valid PC to travel with"));
 					return;
 				}
+				
+				if (GEngine)
+				{
+					GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Emerald,
+						FString::Printf(TEXT("Joined, traveling to: %s..."), 
+						*Address));
+				}
+				
 				PlayerController->ClientTravel(Address, TRAVEL_Absolute);
 			}
 			break;
 
 		default: break;
 	}
+
+	OnlineSession->ClearOnJoinSessionCompleteDelegate_Handle(JoinSessionCompleteDelegate_Handle);
+	JoinSessionCompleteDelegate_Handle.Reset();
 }
 
 void AMenuSystemCharacter::TouchStarted(ETouchIndex::Type FingerIndex, FVector Location)
