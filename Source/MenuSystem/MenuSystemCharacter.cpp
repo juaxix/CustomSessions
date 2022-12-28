@@ -11,13 +11,14 @@
 #include <OnlineSessionSettings.h>
 #include <OnlineSubsystem.h>
 
+#include "CustomSessionSubsystem.h"
+
 //////////////////////////////////////////////////////////////////////////
 // AMenuSystemCharacter
 
 namespace
 {
 	const FName MatchGameSessionName(NAME_GameSession);
-	const FName MatchTypeName("MatchType");
 	const FString MatchTypeFree4a("FreeForAll");
 }
 
@@ -61,43 +62,6 @@ AMenuSystemCharacter::AMenuSystemCharacter()
 	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
 }
 
-void AMenuSystemCharacter::BeginPlay()
-{
-	Super::BeginPlay();
-	
-	// Online subsystem addition
-	const IOnlineSubsystem* OnlineSubsystem = IOnlineSubsystem::Get();
-	if (OnlineSubsystem)
-	{
-		OnlineSession = OnlineSubsystem->GetSessionInterface();
-		if (!OnlineSession.IsValid())
-		{
-			return;
-		}
-
-		if (!CreateSessionCompleteDelegate.IsBoundToObject(this))
-		{
-			CreateSessionCompleteDelegate.BindUObject(this, &ThisClass::OnCreateSessionComplete);
-		}
-
-		if (!FindSessionsCompleteDelegate.IsBoundToObject(this))
-		{
-			FindSessionsCompleteDelegate.BindUObject(this, &ThisClass::OnFindSessionsComplete);
-		}
-
-		if (!JoinSessionCompleteDelegate.IsBoundToObject(this))
-		{
-			JoinSessionCompleteDelegate.BindUObject(this, &ThisClass::OnJoinSessionComplete);
-		}
-		
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Cyan, 
-				FString::Printf(TEXT("Found subsystem: %s"), *OnlineSubsystem->GetSubsystemName().ToString()));
-		}
-	}
-}
-
 //////////////////////////////////////////////////////////////////////////
 // Input
 
@@ -126,44 +90,10 @@ void AMenuSystemCharacter::SetupPlayerInputComponent(class UInputComponent* Play
 
 void AMenuSystemCharacter::CreateGameSession()
 {
-	if (!OnlineSession.IsValid())
+	if (UCustomSessionSubsystem* CustomSessionSubsystem = GetGameInstance()->GetSubsystem<UCustomSessionSubsystem>())
 	{
-		UE_LOG(LogOnlineSession, Error, TEXT("Can't create a session without a valid OSS"));
-		return;
+		CustomSessionSubsystem->CreateSession(MatchGameSessionName, 8, MatchTypeFree4a);
 	}
-
-	if (CreateSessionCompleteDelegate_Handle.IsValid())
-	{
-		return;
-	}
-
-	const UWorld* World = GetWorld();
-	if (!IsValid(World))
-	{
-		return;
-	}
-
-	const ULocalPlayer* LocalPlayer = World->GetFirstLocalPlayerFromController();
-	if (!IsValid(LocalPlayer))
-	{
-		return;
-	}
-
-	if (OnlineSession->GetNamedSession(MatchGameSessionName))
-	{
-		OnlineSession->DestroySession(MatchGameSessionName);
-	}
-
-	const TSharedRef<FOnlineSessionSettings> NewSessionSettings = MakeShared<FOnlineSessionSettings>();
-	NewSessionSettings->bIsLANMatch = false;
-	NewSessionSettings->NumPublicConnections = 4;
-	NewSessionSettings->bAllowJoinInProgress = true;
-	NewSessionSettings->bShouldAdvertise = true;
-	NewSessionSettings->bUseLobbiesIfAvailable = true;
-	NewSessionSettings->Set(MatchTypeName, MatchTypeFree4a, EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
-	NewSessionSettings->bAllowJoinViaPresence = NewSessionSettings->bUsesPresence = true; // use world regions!
-	CreateSessionCompleteDelegate_Handle = OnlineSession->AddOnCreateSessionCompleteDelegate_Handle(CreateSessionCompleteDelegate);
-	OnlineSession->CreateSession(*LocalPlayer->GetPreferredUniqueNetId(), MatchGameSessionName, *NewSessionSettings);
 }
 
 void AMenuSystemCharacter::JoinGameSession()
