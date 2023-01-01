@@ -7,6 +7,8 @@
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "CustomSessionSubsystem.generated.h"
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCustomSessionCreateSessionCompleted, bool, bWasSuccessful);
+
 UCLASS()
 class CUSTOMSESSIONS_API UCustomSessionSubsystem : public UGameInstanceSubsystem
 {
@@ -19,15 +21,19 @@ public:
 		return true;
 	}
 
-	void CreateSession(FName SessionName, int32 NumPublicConnections, const FString& MatchType);
+	void CreateSession(FName SessionName, int32 NumPublicConnections, const FString& MatchType = TEXT("FreeForAll"));
 
-	void FindSession(int32 MaxSearchResults);
+	bool FindSession(int32 MaxSearchResults, FName SessionName = NAME_GameSession, const FString& MatchType = TEXT("FreeForAll"));
 
 	void JoinSession(const FOnlineSessionSearchResult& SearchResult);
 
 	void StartSession();
 	
 	void DestroySession();
+
+	TSharedRef<FOnlineSessionSettings> GetSessionSettings() const { return SessionSettings.ToSharedRef(); }
+	
+	FCustomSessionCreateSessionCompleted OnCustomSessionCreateSessionCompleted;
 
 private:
 	void CreateSessionCompleted(FName SessionName, bool bWasSuccessful);
@@ -36,16 +42,23 @@ private:
 	void StartSessionCompleted(FName SessionName, bool bWasSuccessful);
 	void DestroySessionCompleted(FName SessionName, bool bWasSuccessful);
 	
-	IOnlineSessionPtr OnlineSession = nullptr;
+	FDelegateHandle CreateSessionCompleteDelegate_Handle,
+					FindSessionsCompleteDelegate_Handle,
+					JoinSessionCompleteDelegate_Handle,
+					StartSessionCompleteDelegate_Handle,
+					DestroySessionCompleteDelegate_Handle;
+
 	FOnCreateSessionCompleteDelegate OnCreateSessionCompleteDelegate;
 	FOnFindSessionsCompleteDelegate OnFindSessionsCompleteDelegate;
 	FOnJoinSessionCompleteDelegate OnJoinSessionCompleteDelegate;
 	FOnStartSessionCompleteDelegate OnStartSessionCompleteDelegate;
 	FOnDestroySessionCompleteDelegate OnDestroySessionCompleteDelegate;
 
-	FDelegateHandle CreateSessionCompleteDelegate_Handle,
-					FindSessionsCompleteDelegate_Handle,
-					JoinSessionCompleteDelegate_Handle,
-					StartSessionCompleteDelegate_Handle,
-					DestroySessionCompleteDelegate_Handle;
+	IOnlineSessionPtr OnlineSession = nullptr;
+	
+	TSharedPtr<FOnlineSessionSettings> SessionSettings;
+	TSharedPtr<FOnlineSessionSearch> SessionSearch;
+
+	FName CurrentGameSession = NAME_GameSession;
+	FString CurrentMatchType = "";
 };

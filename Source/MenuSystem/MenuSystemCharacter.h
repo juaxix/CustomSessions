@@ -4,7 +4,6 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
-#include "Interfaces/OnlineSessionInterface.h"
 #include "MenuSystemCharacter.generated.h"
 
 UCLASS(config=Game)
@@ -62,30 +61,4 @@ public:
 	FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 	/** Returns FollowCamera subobject **/
 	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
-
-
-protected:
-	UFUNCTION(BlueprintCallable, Category = "Custom Sessions|Session")
-	void CreateGameSession();
-
-	UFUNCTION(BlueprintCallable, Category = "Custom Sessions|Session")
-	void JoinGameSession();
-
-	void OnCreateSessionComplete(FName SessionName, bool bWasSuccessful);
-	void OnFindSessionsComplete(bool bWasSuccessful);
-	void OnJoinSessionComplete(FName SessionName, EOnJoinSessionCompleteResult::Type Result);
-
-	TSharedPtr<FOnlineSessionSearch> SessionSearch;
-
-private:
-	FOnCreateSessionCompleteDelegate CreateSessionCompleteDelegate;
-	FOnFindSessionsCompleteDelegate FindSessionsCompleteDelegate;
-	FOnJoinSessionCompleteDelegate JoinSessionCompleteDelegate;
-
-	FDelegateHandle CreateSessionCompleteDelegate_Handle,
-					FindSessionsCompleteDelegate_Handle,
-					JoinSessionCompleteDelegate_Handle;
-
-	IOnlineSessionPtr OnlineSession = nullptr;
-
 };

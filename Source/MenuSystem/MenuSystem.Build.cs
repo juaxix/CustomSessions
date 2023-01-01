@@ -9,7 +9,8 @@ public class MenuSystem : ModuleRules
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
 		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", 
-			"OnlineSubsystem", "OnlineSubsystemSteam" });
+			"OnlineSubsystem", "OnlineSubsystemSteam"
+		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { "CustomSessions" });
 
