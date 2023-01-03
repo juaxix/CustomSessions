@@ -3,6 +3,7 @@
 
 #include "MenuWidget.h"
 #include "CustomSessionSubsystem.h"
+#include "OnlineSessionSettings.h"
 #include "Components/Button.h"
 #include "Components/EditableTextBox.h"
 #include "Components/SpinBox.h"
@@ -60,7 +61,7 @@ void UMenuWidget::ButtonHostClicked()
 
 void UMenuWidget::OnHostCreated_Implementation(bool bWasSuccessful)
 {
-	if (CustomSessionSubsystem)
+	if (IsValid(CustomSessionSubsystem))
 	{
 		CustomSessionSubsystem->OnCustomSessionCreateSessionCompleted.RemoveAll(this);
 	}
@@ -75,7 +76,106 @@ void UMenuWidget::ButtonJoinClicked()
 
 	if (IsValid(CustomSessionSubsystem) && EditableTextBox_MatchType)
 	{
+		CustomSessionSubsystem->OnCustomSessionFindSessionsCompleted.AddUObject(this, &ThisClass::OnFindSessionCompleted);
 		CustomSessionSubsystem->FindSession(MaxSearchResults, NAME_GameSession, EditableTextBox_MatchType->GetText().ToString());
+	}
+}
+
+void UMenuWidget::OnHostJoined_Implementation(bool bWasSuccessful, const FString& Address)
+{
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Emerald,
+			FString::Printf(TEXT("Joined, travel address: %s..."), 
+			*Address));
+	}
+}
+
+void UMenuWidget::OnFindSessionCompleted(const TArray<FOnlineSessionSearchResult>& SessionResults, bool bWasSuccessful)
+{
+	if (!IsValid(CustomSessionSubsystem))
+	{
+		return;
+	}
+
+	CustomSessionSubsystem->OnCustomSessionFindSessionsCompleted.RemoveAll(this);
+
+	const FOnlineSessionSearchResult* SessionToJoin = nullptr;
+	for (const FOnlineSessionSearchResult& Result : SessionResults)
+	{
+		if (!Result.IsValid() || !Result.IsSessionInfoValid())
+		{
+			continue;
+		}
+
+		const FString IdStr = Result.GetSessionIdStr();
+		const FString& User = Result.Session.OwningUserName;
+		FString MatchType;
+		Result.Session.SessionSettings.Get(CustomSessionsApi::MatchTypeKey, MatchType);
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Green,
+				FString::Printf(TEXT("Session Id: %s, owner: %s, Type: %s"), 
+				*IdStr, *User, *MatchType));
+		}
+
+		if (!SessionToJoin && MatchType.Equals(CustomSessionSubsystem->CurrentMatchType))
+		{
+			SessionToJoin = &Result;
+		}
+	}
+
+	if (SessionToJoin != nullptr)
+	{
+		CustomSessionSubsystem->OnCustomsessionJoinSessionCompleted.AddUObject(this, &UMenuWidget::OnJoinSessionCompleted);
+		CustomSessionSubsystem->JoinSession(*SessionToJoin);
+	}
+	else
+	{
+		UE_LOG(LogOnlineSession, Warning, TEXT("Could not find any session of match type: %s"), *CustomSessionSubsystem->CurrentMatchType);
+	}
+}
+
+void UMenuWidget::OnJoinSessionCompleted(EOnJoinSessionCompleteResult::Type JoinResult)
+{
+	if (!IsValid(CustomSessionSubsystem) || !CustomSessionSubsystem->OnlineSession.IsValid())
+	{
+		UE_LOG(LogOnlineSession, Error, TEXT("Could not get the Online session"));
+		OnHostJoined(false, "");
+		return;
+	}
+
+	CustomSessionSubsystem->OnCustomsessionJoinSessionCompleted.RemoveAll(this);
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Emerald,
+			FString::Printf(TEXT("Join Session [%s] completed with Result: %d"),
+			*CustomSessionSubsystem->CurrentGameSession.ToString(), static_cast<uint8>(JoinResult)));
+	}
+	
+	switch (JoinResult)
+	{
+		case EOnJoinSessionCompleteResult::Success:
+		{
+			FString Address;
+			if (!CustomSessionSubsystem->OnlineSession->GetResolvedConnectString(CustomSessionSubsystem->CurrentGameSession, Address))
+			{
+				UE_LOG(LogOnlineSession, Error, TEXT("Could not get the address to travel to"));
+				OnHostJoined(false, "");
+
+				return;
+			}
+
+			
+
+			OnHostJoined(true, Address);
+			
+		}
+		break;
+
+		default: OnHostJoined(false, "");
+		break;
 	}
 }
 

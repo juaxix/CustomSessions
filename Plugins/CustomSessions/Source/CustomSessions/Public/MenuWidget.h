@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Interfaces/OnlineSessionInterface.h"
 #include "MenuWidget.generated.h"
 
 class UButton;
@@ -26,11 +27,18 @@ protected:
 	UFUNCTION()
 	virtual void ButtonHostClicked();
 
-	UFUNCTION(BlueprintNativeEvent, Category = "Custom Sessions", meta = (AllowPrivateAccess = true)) 
+	UFUNCTION(BlueprintNativeEvent, Category = "Custom Sessions", meta = (AllowPrivateAccess = true, Tooltip = "When a host is created, the BP code should contain a server travel")) 
 	void OnHostCreated(bool bWasSuccessful);
 
 	UFUNCTION()
 	virtual void ButtonJoinClicked();
+
+	UFUNCTION(BlueprintNativeEvent, Category = "Custom Sessions", meta = (AllowPrivateAccess = true, Tooltip = "When a host is created, the BP code should contain a client travel to the address")) 
+	void OnHostJoined(bool bWasSuccessful, const FString& Address);
+
+	virtual void OnFindSessionCompleted(const TArray<FOnlineSessionSearchResult>& SessionResults, bool bWasSuccessful);
+
+	virtual void OnJoinSessionCompleted(EOnJoinSessionCompleteResult::Type SessionResult);
 
 	virtual bool Initialize() override;
 

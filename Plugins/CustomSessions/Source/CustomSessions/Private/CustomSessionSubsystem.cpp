@@ -5,11 +5,6 @@
 #include "OnlineSessionSettings.h"
 #include "OnlineSubsystem.h"
 
-namespace
-{
-	const FName MatchTypeKey("MatchType");
-}
-
 void UCustomSessionSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
 	Super::Initialize(Collection);
@@ -35,12 +30,14 @@ void UCustomSessionSubsystem::CreateSession(FName SessionName, int32 NumPublicCo
 	{
 		UE_LOG(LogOnlineSession, Error, TEXT("Can't create a session without a valid OSS"));
 		OnCustomSessionCreateSessionCompleted.Broadcast(false);
+
 		return;
 	}
 
 	if (CreateSessionCompleteDelegate_Handle.IsValid())
 	{
 		OnCustomSessionCreateSessionCompleted.Broadcast(false);
+
 		return;
 	}
 
@@ -48,6 +45,7 @@ void UCustomSessionSubsystem::CreateSession(FName SessionName, int32 NumPublicCo
 	if (!IsValid(World))
 	{
 		OnCustomSessionCreateSessionCompleted.Broadcast(false);
+
 		return;
 	}
 
@@ -55,6 +53,7 @@ void UCustomSessionSubsystem::CreateSession(FName SessionName, int32 NumPublicCo
 	if (!IsValid(LocalPlayer))
 	{
 		OnCustomSessionCreateSessionCompleted.Broadcast(false);
+
 		return;
 	}
 
@@ -71,7 +70,7 @@ void UCustomSessionSubsystem::CreateSession(FName SessionName, int32 NumPublicCo
 	SessionSettings->bUseLobbiesIfAvailable = true;
 	SessionSettings->bAllowJoinViaPresence = true;
 	SessionSettings->bUsesPresence = true; // use world regions!
-	SessionSettings->Set(MatchTypeKey, MatchType, EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
+	SessionSettings->Set(CustomSessionsApi::MatchTypeKey, MatchType, EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
 	CreateSessionCompleteDelegate_Handle = OnlineSession->AddOnCreateSessionCompleteDelegate_Handle(OnCreateSessionCompleteDelegate);
 	if (!OnlineSession->CreateSession(*LocalPlayer->GetPreferredUniqueNetId(), SessionName, SessionSettings.ToSharedRef().Get()))
 	{
@@ -85,23 +84,31 @@ bool UCustomSessionSubsystem::FindSession(int32 MaxSearchResults, FName SessionN
 	if (!OnlineSession.IsValid())
 	{
 		UE_LOG(LogOnlineSession, Error, TEXT("Can't create a session without a valid OSS"));
+		FindSessionCompleted(false);
+
 		return false;
 	}
 
 	if (FindSessionsCompleteDelegate_Handle.IsValid())
 	{
+		FindSessionCompleted(false);
+
 		return false;
 	}
 
 	const UWorld* World = GetWorld();
 	if (!IsValid(World))
 	{
+		FindSessionCompleted(false);
+
 		return false;
 	}
 
 	const ULocalPlayer* LocalPlayer = World->GetFirstLocalPlayerFromController();
 	if (!IsValid(LocalPlayer))
 	{
+		FindSessionCompleted(false);
+
 		return false;
 	}
 
@@ -110,14 +117,26 @@ bool UCustomSessionSubsystem::FindSession(int32 MaxSearchResults, FName SessionN
 
 	SessionSearch = MakeShareable(new FOnlineSessionSearch());
 	SessionSearch->MaxSearchResults = MaxSearchResults;
-	SessionSearch->bIsLanQuery = false;
+	SessionSearch->bIsLanQuery = IOnlineSubsystem::Get()->GetSubsystemName().IsEqual(NULL_SUBSYSTEM);
 	SessionSearch->QuerySettings.Set(SEARCH_PRESENCE, true, EOnlineComparisonOp::Equals);
 	FindSessionsCompleteDelegate_Handle = OnlineSession->AddOnFindSessionsCompleteDelegate_Handle(OnFindSessionsCompleteDelegate);
-	return OnlineSession->FindSessions(*LocalPlayer->GetPreferredUniqueNetId(), SessionSearch.ToSharedRef());
+	if (!OnlineSession->FindSessions(*LocalPlayer->GetPreferredUniqueNetId(), SessionSearch.ToSharedRef()))
+	{
+		FindSessionCompleted(false);
+
+		return false;
+	}
+
+	return true;
 }
 
 void UCustomSessionSubsystem::JoinSession(const FOnlineSessionSearchResult& SearchResult)
 {
+	if (!OnlineSession.IsValid())
+	{
+		return;
+	}
+
 	const UWorld* World = GetWorld();
 	if (!IsValid(World))
 	{
@@ -189,11 +208,15 @@ void UCustomSessionSubsystem::FindSessionCompleted(bool bWasSuccessful)
 
 	if (!SessionSearch.IsValid())
 	{
+		OnCustomSessionFindSessionsCompleted.Broadcast(TArray<FOnlineSessionSearchResult>(), false);
+
 		return;
 	}
 
 	if (JoinSessionCompleteDelegate_Handle.IsValid())
 	{
+		OnCustomSessionFindSessionsCompleted.Broadcast(TArray<FOnlineSessionSearchResult>(), false);
+
 		return;
 	}
 
@@ -204,6 +227,8 @@ void UCustomSessionSubsystem::FindSessionCompleted(bool bWasSuccessful)
 			GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Red,
 				FString("Error finding sessions"));
 		}
+
+		OnCustomSessionFindSessionsCompleted.Broadcast(TArray<FOnlineSessionSearchResult>(), false);
 
 		return;
 	}
@@ -216,42 +241,12 @@ void UCustomSessionSubsystem::FindSessionCompleted(bool bWasSuccessful)
 				FString("No sessions found"));
 		}
 
+		OnCustomSessionFindSessionsCompleted.Broadcast(TArray<FOnlineSessionSearchResult>(), false);
+
 		return;
 	}
 
-	const FOnlineSessionSearchResult* SessionToJoin = nullptr;
-	for (const FOnlineSessionSearchResult& Result : SessionSearch->SearchResults)
-	{
-		if (!Result.IsValid() || !Result.IsSessionInfoValid())
-		{
-			continue;
-		}
-
-		const FString IdStr = Result.GetSessionIdStr();
-		const FString& User = Result.Session.OwningUserName;
-		FString MatchType;
-		Result.Session.SessionSettings.Get(MatchTypeKey, MatchType);
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Green,
-				FString::Printf(TEXT("Session Id: %s, owner: %s, Type: %s"), 
-				*IdStr, *User, *MatchType));
-		}
-
-		if (!SessionToJoin && MatchType.Equals(CurrentMatchType))
-		{
-			SessionToJoin = &Result;
-		}
-	}
-
-	if (SessionToJoin != nullptr)
-	{
-		JoinSession(*SessionToJoin);
-	}
-	else
-	{
-		UE_LOG(LogOnlineSession, Warning, TEXT("Could not find any session of match type: %s"), *CurrentMatchType);
-	}
+	OnCustomSessionFindSessionsCompleted.Broadcast(SessionSearch->SearchResults, true);
 }
 
 void UCustomSessionSubsystem::JoinSessionCompleted(FName SessionName, EOnJoinSessionCompleteResult::Type JoinResult)
@@ -259,50 +254,14 @@ void UCustomSessionSubsystem::JoinSessionCompleted(FName SessionName, EOnJoinSes
 	if (!OnlineSession)
 	{
 		UE_LOG(LogOnlineSession, Error, TEXT("AMenuSystemCharacter::OnJoinSessionComplete : OnlineSession is not valid"));
-		return;
-	}
-	
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Emerald,
-			FString::Printf(TEXT("Join Session [%s] completed with Result: %d"),
-			*SessionName.ToString(), static_cast<uint8>(JoinResult)));
-	}
-	
-	switch (JoinResult)
-	{
-		case EOnJoinSessionCompleteResult::Success:
-			{
-				FString Address;
-				if (!OnlineSession->GetResolvedConnectString(CurrentGameSession, Address))
-				{
-					UE_LOG(LogOnlineSession, Error, TEXT("Could not get the address to travel to"));
-					return;
-				}
-				
-				APlayerController* PlayerController = GetGameInstance()->GetFirstLocalPlayerController();
-				if (!IsValid(PlayerController))
-				{
-					UE_LOG(LogOnlineSession, Error, TEXT("Could not find a valid PC to travel with"));
-					return;
-				}
-				
-				if (GEngine)
-				{
-					GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Emerald,
-						FString::Printf(TEXT("Joined, traveling to: %s..."), 
-						*Address));
-				}
-				
-				PlayerController->ClientTravel(Address, TRAVEL_Absolute);
-			}
-			break;
+		OnCustomsessionJoinSessionCompleted.Broadcast(EOnJoinSessionCompleteResult::UnknownError);
 
-		default: break;
+		return;
 	}
 
 	OnlineSession->ClearOnJoinSessionCompleteDelegate_Handle(JoinSessionCompleteDelegate_Handle);
 	JoinSessionCompleteDelegate_Handle.Reset();
+	OnCustomsessionJoinSessionCompleted.Broadcast(JoinResult);
 }
 
 void UCustomSessionSubsystem::StartSessionCompleted(FName SessionName, bool bWasSuccessful)
