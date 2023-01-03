@@ -25,6 +25,12 @@ void UCustomSessionSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	}
 }
 
+void UCustomSessionSubsystem::Deinitialize()
+{
+	DestroySession();
+	Super::Deinitialize();
+}
+
 void UCustomSessionSubsystem::CreateSession(FName SessionName, int32 NumPublicConnections, const FString& MatchType)
 {
 	if (!OnlineSession.IsValid())
