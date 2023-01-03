@@ -43,6 +43,29 @@ void UMenuWidget::MenuTearDown()
 	}
 }
 
+void UMenuWidget::EnableDisableInputs(bool bEnable)
+{
+	if (IsValid(Button_Host))
+	{
+		Button_Host->SetIsEnabled(bEnable);
+	}
+
+	if (IsValid(Button_Join))
+	{
+		Button_Join->SetIsEnabled(bEnable);
+	}
+
+	if (IsValid(EditableTextBox_MatchType))
+	{
+		EditableTextBox_MatchType->SetIsEnabled(bEnable);
+	}
+
+	if (IsValid(SpinBox_NumConnections))
+	{
+		SpinBox_NumConnections->SetIsEnabled(bEnable);
+	}
+}
+
 void UMenuWidget::ButtonHostClicked()
 {
 	if (GEngine)
@@ -56,15 +79,27 @@ void UMenuWidget::ButtonHostClicked()
 		CustomSessionSubsystem->CreateSession(NAME_GameSession,
 			static_cast<uint8>(SpinBox_NumConnections->Value), 
 			EditableTextBox_MatchType->GetText().ToString());
+
+		EnableDisableInputs(false);
 	}
 }
 
 void UMenuWidget::OnHostCreated_Implementation(bool bWasSuccessful)
 {
+	EnableDisableInputs(!bWasSuccessful);
+
 	if (IsValid(CustomSessionSubsystem))
 	{
 		CustomSessionSubsystem->OnCustomSessionCreateSessionCompleted.RemoveAll(this);
 	}
+
+	UWorld* World = GetWorld();
+	if (!IsValid(World))
+	{
+		return;
+	}
+
+	World->ServerTravel(LobbyMap + "?listen");
 }
 
 void UMenuWidget::ButtonJoinClicked()
@@ -78,17 +113,34 @@ void UMenuWidget::ButtonJoinClicked()
 	{
 		CustomSessionSubsystem->OnCustomSessionFindSessionsCompleted.AddUObject(this, &ThisClass::OnFindSessionCompleted);
 		CustomSessionSubsystem->FindSession(MaxSearchResults, NAME_GameSession, EditableTextBox_MatchType->GetText().ToString());
+		EnableDisableInputs(false);
 	}
 }
 
 void UMenuWidget::OnHostJoined_Implementation(bool bWasSuccessful, const FString& Address)
 {
+	EnableDisableInputs(!bWasSuccessful);
+
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Emerald,
 			FString::Printf(TEXT("Joined, travel address: %s..."), 
 			*Address));
 	}
+
+	const UWorld* World = GetWorld();
+	if (!IsValid(World))
+	{
+		return;
+	}
+
+	APlayerController* PlayerController = World->GetFirstPlayerController();
+	if (!IsValid(PlayerController))
+	{
+		return;
+	}
+
+	PlayerController->ClientTravel(Address, TRAVEL_Absolute);
 }
 
 void UMenuWidget::OnFindSessionCompleted(const TArray<FOnlineSessionSearchResult>& SessionResults, bool bWasSuccessful)

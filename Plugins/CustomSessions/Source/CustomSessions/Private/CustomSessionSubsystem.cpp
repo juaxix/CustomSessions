@@ -16,6 +16,7 @@ void UCustomSessionSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 			GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Cyan, 
 				FString::Printf(TEXT("Found subsystem: %s"), *OnlineSubsystem->GetSubsystemName().ToString()));
 		}
+
 		OnCreateSessionCompleteDelegate.BindUObject(this, &ThisClass::CreateSessionCompleted);
 		OnFindSessionsCompleteDelegate.BindUObject(this, &ThisClass::FindSessionCompleted);
 		OnJoinSessionCompleteDelegate.BindUObject(this, &ThisClass::JoinSessionCompleted);
@@ -57,9 +58,19 @@ void UCustomSessionSubsystem::CreateSession(FName SessionName, int32 NumPublicCo
 		return;
 	}
 
-	if (OnlineSession->GetNamedSession(SessionName))
+	if (OnlineSession->GetNamedSession(SessionName) != nullptr)
 	{
-		OnlineSession->DestroySession(SessionName);
+		OnDestroySessionCompleteLambdaDelegate.Unbind();
+		OnDestroySessionCompleteLambdaDelegate.BindLambda(
+		[this, SessionName, NumPublicConnections, MatchType](FName OldSessionName, bool bWasSuccessful) -> void
+		{
+			CreateSession(SessionName, NumPublicConnections, MatchType);
+		});
+
+		DestroySessionCompleteDelegateLambda_Handle = OnlineSession->AddOnDestroySessionCompleteDelegate_Handle(OnDestroySessionCompleteLambdaDelegate);
+		DestroySession();
+
+		return;
 	}
 
 	SessionSettings = MakeShareable(new FOnlineSessionSettings());
@@ -71,6 +82,7 @@ void UCustomSessionSubsystem::CreateSession(FName SessionName, int32 NumPublicCo
 	SessionSettings->bAllowJoinViaPresence = true;
 	SessionSettings->bUsesPresence = true; // use world regions!
 	SessionSettings->Set(CustomSessionsApi::MatchTypeKey, MatchType, EOnlineDataAdvertisementType::ViaOnlineServiceAndPing);
+	SessionSettings->BuildUniqueId = 1;
 	CreateSessionCompleteDelegate_Handle = OnlineSession->AddOnCreateSessionCompleteDelegate_Handle(OnCreateSessionCompleteDelegate);
 	if (!OnlineSession->CreateSession(*LocalPlayer->GetPreferredUniqueNetId(), SessionName, SessionSettings.ToSharedRef().Get()))
 	{
@@ -167,6 +179,19 @@ void UCustomSessionSubsystem::StartSession()
 
 void UCustomSessionSubsystem::DestroySession()
 {
+	if (!OnlineSession.IsValid() || DestroySessionCompleteDelegate_Handle.IsValid())
+	{
+		OnDestroySessionCompleteLambdaDelegate.ExecuteIfBound(CurrentGameSession, false);
+		DestroySessionCompleted(CurrentGameSession, false);
+		return;
+	}
+
+	DestroySessionCompleteDelegate_Handle = OnlineSession->AddOnDestroySessionCompleteDelegate_Handle(OnDestroySessionCompleteDelegate);
+	if (!OnlineSession->DestroySession(CurrentGameSession))
+	{
+		OnDestroySessionCompleteLambdaDelegate.ExecuteIfBound(CurrentGameSession, false);
+		DestroySessionCompleted(CurrentGameSession, false);
+	}
 }
 
 void UCustomSessionSubsystem::CreateSessionCompleted(FName SessionName, bool bWasSuccessful)
@@ -266,8 +291,17 @@ void UCustomSessionSubsystem::JoinSessionCompleted(FName SessionName, EOnJoinSes
 
 void UCustomSessionSubsystem::StartSessionCompleted(FName SessionName, bool bWasSuccessful)
 {
+
 }
 
 void UCustomSessionSubsystem::DestroySessionCompleted(FName SessionName, bool bWasSuccessful)
 {
+	if (OnlineSession.IsValid())
+	{
+		OnlineSession->ClearOnDestroySessionCompleteDelegate_Handle(DestroySessionCompleteDelegate_Handle);
+		OnlineSession->ClearOnDestroySessionCompleteDelegate_Handle(DestroySessionCompleteDelegateLambda_Handle);
+		OnDestroySessionCompleteLambdaDelegate.Unbind();
+	}
+
+	OnCustomSessionDestroySessionCompleted.Broadcast(bWasSuccessful);
 }

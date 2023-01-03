@@ -14,4 +14,8 @@ class MENUSYSTEM_API AMenuSystemGameModeBase : public AGameModeBase
 {
 	GENERATED_BODY()
 	
+public:
+	virtual void PostLogin(APlayerController* NewPlayer) override;
+
+	virtual void Logout(AController* Exiting) override;
 };

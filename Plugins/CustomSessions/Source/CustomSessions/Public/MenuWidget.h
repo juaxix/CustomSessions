@@ -23,6 +23,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Custom Sessions|UI|Menu")
 	void MenuTearDown();
 
+	UFUNCTION(BlueprintCallable, Category = "Custom Sessions|UI|Menu")
+	void EnableDisableInputs(bool bEnable);
+
 protected:
 	UFUNCTION()
 	virtual void ButtonHostClicked();
@@ -51,6 +54,9 @@ protected:
 public:
 	UPROPERTY(EditAnywhere, Category = "Search sessions")
 	int32 MaxSearchResults = 32;
+
+	UPROPERTY(EditAnywhere, Category = "Sessions")
+	FString LobbyMap{TEXT("")};
 
 protected:
 	UPROPERTY(meta = (BindWidget))

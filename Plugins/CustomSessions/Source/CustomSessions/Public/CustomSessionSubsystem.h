@@ -25,6 +25,8 @@ class CUSTOMSESSIONS_API UCustomSessionSubsystem : public UGameInstanceSubsystem
 	
 public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
+	virtual void Deinitialize() override;
+
 	virtual bool ShouldCreateSubsystem(UObject* Outer) const override
 	{
 		return true;
@@ -72,13 +74,15 @@ private:
 					FindSessionsCompleteDelegate_Handle,
 					JoinSessionCompleteDelegate_Handle,
 					StartSessionCompleteDelegate_Handle,
-					DestroySessionCompleteDelegate_Handle;
+					DestroySessionCompleteDelegate_Handle,
+					DestroySessionCompleteDelegateLambda_Handle;
 
 	FOnCreateSessionCompleteDelegate OnCreateSessionCompleteDelegate;
 	FOnFindSessionsCompleteDelegate OnFindSessionsCompleteDelegate;
 	FOnJoinSessionCompleteDelegate OnJoinSessionCompleteDelegate;
 	FOnStartSessionCompleteDelegate OnStartSessionCompleteDelegate;
-	FOnDestroySessionCompleteDelegate OnDestroySessionCompleteDelegate;
+	FOnDestroySessionCompleteDelegate OnDestroySessionCompleteDelegate,
+									  OnDestroySessionCompleteLambdaDelegate;
 	
 	TSharedPtr<FOnlineSessionSettings> SessionSettings;
 	TSharedPtr<FOnlineSessionSearch> SessionSearch;

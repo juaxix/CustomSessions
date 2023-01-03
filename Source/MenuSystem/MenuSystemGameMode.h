@@ -14,6 +14,3 @@ class AMenuSystemGameMode : public AGameModeBase
 public:
 	AMenuSystemGameMode();
 };
-
-
-
